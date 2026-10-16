@@ -9,9 +9,9 @@
 <style>
   :root{
   /* 柔和主題 */
-  --bg:#f1f5f7;         /* 淺色模式：低彩度灰藍，降低大面積純白刺眼感 */
-  --card:#f9fbfc;       /* 大型內容區：柔和近白，與白色學生卡形成層次 */
-  --line:#dce4e9;       /* 柔和灰藍邊界 */
+  --bg:#e8eef2;         /* 淺色模式：明顯但柔和的低彩度灰藍底 */
+  --card:#f5f8fa;       /* 大型內容區：柔和近白，和學生卡形成清楚層次 */
+  --line:#d3dde4;       /* 柔和灰藍邊界 */
 
   --ink:#24323d;        /* 主要文字：深灰藍，清楚但不使用純黑 */
   --muted:#647582;      /* 次要文字：柔和灰藍 */
@@ -29,7 +29,7 @@
   
   .group{
   display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;
-  background:#f3f6f8; border:1px solid var(--line); padding:.35rem .5rem; border-radius:10px;
+  background:#edf2f5; border:1px solid var(--line); padding:.35rem .5rem; border-radius:10px;
   position:relative; /* ← 新增：讓 #moreMenu 以 group 為定位參考 */
   }
 
@@ -3282,6 +3282,20 @@ c.seats[k] = { name: keepName, img: isSecurePhotoRef_(url) ? url : normalizeDriv
   }
 </style>
 
+
+<style id="light-comfort-v10">
+/* === v1.0 淺色模式舒適度精修：只影響淺色，不動深色模式 === */
+:root:not([data-theme="dark"]) header{background:#f4f7f9 !important;}
+:root:not([data-theme="dark"]) .bar{background:#f4f7f9;}
+:root:not([data-theme="dark"]) main{background:var(--bg);}
+:root:not([data-theme="dark"]) .stage{background:#f5f8fa !important;}
+:root:not([data-theme="dark"]) .group{background:#edf2f5 !important;}
+:root:not([data-theme="dark"]) .seat{background:#ffffff !important;border-color:#d3dde4 !important;}
+:root:not([data-theme="dark"]) .photo{background:#f7f9fa !important;}
+:root:not([data-theme="dark"]) .tab:not(.active),
+:root:not([data-theme="dark"]) .btn:not(.primary):not(.danger),
+:root:not([data-theme="dark"]) .sizeCtl{background:#fbfcfd;}
+</style>
 
 <style id="theme-v331-override">
 /* === v3.3.1：刪除班級 hover 修正 + 全站深色模式 === */
