@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>座位表工具－雲端版 v4.0</title>
+<title>座位表工具-雲端版_v1.0</title>
 <script>try{if(localStorage.getItem('seating.theme.v331')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}</script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
   /* 柔和主題 */
-  --bg:#f8fafc;         /* 頁面底色：更乾淨、偏冷白 */
-  --card:#ffffff;       /* 卡片底色 */
-  --line:#e5e7eb;       /* 邊界線：淡灰 */
+  --bg:#f1f5f7;         /* 淺色模式：低彩度灰藍，降低大面積純白刺眼感 */
+  --card:#f9fbfc;       /* 大型內容區：柔和近白，與白色學生卡形成層次 */
+  --line:#dce4e9;       /* 柔和灰藍邊界 */
 
-  --ink:#1f2937;        /* 主要文字：slate-800 */
-  --muted:#64748b;      /* 次要文字：slate-500/600 */
+  --ink:#24323d;        /* 主要文字：深灰藍，清楚但不使用純黑 */
+  --muted:#647582;      /* 次要文字：柔和灰藍 */
 
   /* 品牌主色：Indigo 600，視覺柔和但有辨識度 */
   --brand:#4f46e5;
@@ -29,7 +29,7 @@
   
   .group{
   display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;
-  background:#f8fafc; border:1px solid var(--line); padding:.35rem .5rem; border-radius:10px;
+  background:#f3f6f8; border:1px solid var(--line); padding:.35rem .5rem; border-radius:10px;
   position:relative; /* ← 新增：讓 #moreMenu 以 group 為定位參考 */
   }
 
@@ -789,7 +789,7 @@ button.btn.sm:active{ transform:translateY(0); }
   color:#fff !important;
 }
 
-  /* v4.0 雲端安全登入 */
+  /* 雲端版 v1.0 安全登入 */
   .auth-gate{position:fixed;inset:0;z-index:5000;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(248,250,252,.96);backdrop-filter:blur(6px)}
   .auth-gate[hidden]{display:none}
   .auth-card{width:min(460px,94vw);background:var(--card);border:1px solid var(--line);border-radius:18px;padding:1.25rem;box-shadow:0 22px 60px rgba(15,23,42,.18);text-align:center}
@@ -1058,7 +1058,7 @@ button.btn.sm:active{ transform:translateY(0); }
               <div>6. 這一步只在「第一次部署」或「建立全新 Web App 部署」時需要：由管理者在 HTML 的 <code>DEFAULT_GAS_URL</code> 設定一次。日常使用者不需要填寫 GAS 網址。</div>
               <div style="margin-top:.45rem;"><strong>注意：</strong>若只是「管理部署作業 → 編輯 → 新增版本 → 部署」，通常沿用原部署網址，不必修改；若使用「新增部署」建立新的 Web App，網址可能改變，就要同步更新 <code>DEFAULT_GAS_URL</code>。</div>
               <div style="margin-top:.4rem;">簡單記法：GAS 網址屬於「部署設定」，不是「使用者設定」；設定一次後，GitHub Pages 日常使用不再處理它。</div>
-              <div style="margin-top:.6rem;"><strong>目前 v4.0 正確流程：</strong>先在後端「系統設定」填入 <code>GOOGLE_CLIENT_ID</code>、<code>ALLOWED_EMAILS</code> 與 <code>SPREADSHEET_ID</code> → Web App 以擁有者身分執行、存取權限設為「所有人」 → HTML 固定填入 Web App URL → 使用者從 GitHub Pages 以白名單 Google 帳號登入。未通過後端 Token 與白名單驗證時，不回傳學生資料。 學生照片不回傳 Drive 直連網址，而是經相同白名單驗證後由後端安全載入。</div>
+              <div style="margin-top:.6rem;"><strong>目前雲端版 v1.0 正確流程：</strong>先在後端「系統設定」填入 <code>GOOGLE_CLIENT_ID</code>、<code>ALLOWED_EMAILS</code> 與 <code>SPREADSHEET_ID</code> → Web App 以擁有者身分執行、存取權限設為「所有人」 → HTML 固定填入 Web App URL → 使用者從 GitHub Pages 以白名單 Google 帳號登入。未通過後端 Token 與白名單驗證時，不回傳學生資料。 學生照片不回傳 Drive 直連網址，而是經相同白名單驗證後由後端安全載入。</div>
             </div>
           </details>
         </div>
@@ -1219,7 +1219,7 @@ let fileProxyTargetKey = null;
 
 /* 設定面板元素 */
 const settingsDlg = $('#settingsDlg'), settingsForm = $('#settingsForm');
-const gasUrlInput = null, sheetIdInput = null; // v4.0：來源由後端管理，保留變數僅供舊流程相容
+const gasUrlInput = null, sheetIdInput = null; // 雲端版 v1.0：來源由後端管理，保留變數僅供舊流程相容
 const includePhotosChk = $('#includePhotosChk');
 const testFetchBtn = $('#testFetchBtn'), testResult = $('#testResult');
 const connectionStatus = $('#connectionStatus');
@@ -1356,7 +1356,7 @@ const photoCellInput = $('#photoCellInput');
 const uid = () => (crypto?.randomUUID?.() || 'id-' + Math.random().toString(36).slice(2));
 const defaultClass = (name='未命名班級') => ({ id: uid(), name, seats:{}, draws:{people:[], seats:[]} });
 
-// v4.0：學生名冊／照片不再長期留在 localStorage；只保留本分頁工作階段。
+// 雲端版 v1.0：學生名冊／照片不再長期留在 localStorage；只保留本分頁工作階段。
 try{ localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_LAST_PREVIEW); }catch(_){}
 let state = loadLocal() || { classes:[ defaultClass() ], activeId:null, settings:{ cell:150 } };
 if(!state.activeId) state.activeId = state.classes[0].id;
@@ -1405,8 +1405,10 @@ async function apiPost_(action='data', extra={}){
   if(data.user?.email){ cloudAuth.email=data.user.email; updateAuthorizedUi_(); }
   return data;
 }
-// v4.0：私人 Drive 照片不使用公開／直連網址。
+// 雲端版 v1.0：私人 Drive 照片不使用公開／直連網址。
 // 僅在目前分頁記憶體快取已通過後端白名單驗證所取得的圖片資料；關閉分頁即消失。
+// 效能策略：只在目前實際渲染的班級觸發照片請求；同一分頁已取得的照片以記憶體快取避免重複下載。
+// 不建立永久照片快取、不改動 Drive 原圖，也不引入不穩定的縮圖轉換。
 const securePhotoCache_ = new Map();
 const securePhotoPending_ = new Map();
 function isSecurePhotoRef_(value){ return /^securephoto:/i.test(String(value||'')); }
@@ -2362,7 +2364,7 @@ document.getElementById('migrationHelpBtn')?.addEventListener('click', ()=>{
   alert([
     '移機前快速檢查：',
     '',
-    '1. 先按「匯出座位備份」，下載座位表 v4.0 備份 JSON。注意：備份檔可能包含學生姓名、座號、照片參照或手動加入的照片資料，請視為敏感資料妥善保管。',
+    '1. 先按「匯出座位備份」，下載座位表工具-雲端版_v1.0 備份 JSON。注意：備份檔可能包含學生姓名、座號、照片參照或手動加入的照片資料，請視為敏感資料妥善保管。',
     '2. 若平常使用「保存專案」，請一併保存 seating-data.json。',
     '3. 新電腦開啟 GitHub 固定網址後，先用白名單 Google 帳號登入；只有真的需要還原座位配置時才匯入私人保存的座位備份。',
     '4. 若要重新連結專案檔，再按「開啟專案」選擇 seating-data.json。',
@@ -2380,7 +2382,7 @@ document.getElementById('migrationHelpBtn')?.addEventListener('click', ()=>{
 document.getElementById('backupBtn').addEventListener('click', ()=>{
   try{
     const pack = {
-      format:'seat-tool-v4.0-secure',
+      format:'seat-tool-cloud-v1.0-secure',
       exportedAt:new Date().toISOString(),
       privacyNotice:'此備份可能包含學生姓名、座號、照片參照或手動加入的照片資料，請勿上傳至公開空間。',
       cfg:{
@@ -2404,7 +2406,7 @@ document.getElementById('backupBtn').addEventListener('click', ()=>{
       URL.revokeObjectURL(url);
       a.remove();
     },400);
-    showToast('已匯出 v4.0 備份。此檔可能含學生資料，請妥善保管。');
+    showToast('已匯出雲端版 v1.0 備份。此檔可能含學生資料，請妥善保管。');
 
     // 點完自動關閉選單（可選）
     try{
@@ -2436,7 +2438,7 @@ document.getElementById('restoreInput').addEventListener('change', async e=>{
       // 如果是新打包且有 cfg，把設定寫回 localStorage
       if(data && data.cfg){
         const cfg = data.cfg;
-        // v4.0 雲端安全版只還原非敏感的版面／欄位偏好。
+        // 雲端版 v1.0 只還原非敏感的版面／欄位偏好。
         // 不從備份還原 GAS URL、試算表 ID 或上次名冊預覽，避免繞過後端固定綁定與工作階段保護。
         if('noCol'    in cfg) localStorage.setItem('seating.col.no.v1',     cfg.noCol||'');
         if('nameCol'  in cfg) localStorage.setItem('seating.col.name.v1',   cfg.nameCol||'');
