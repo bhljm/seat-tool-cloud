@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>座位表工具 v4.0｜雲端安全版 RC3</title>
+<title>座位表工具－雲端版 v4.0</title>
 <script>try{if(localStorage.getItem('seating.theme.v331')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}</script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -841,18 +841,18 @@ button.btn.sm:active{ transform:translateY(0); }
         <span id="cloudAuthChip" class="cloud-auth-chip" hidden>🔐 <span class="email" id="cloudAuthEmail"></span></span>
         <button class="btn sm" id="themeToggleBtn" type="button" title="切換深色／淺色模式">🌙深色</button>
         <button class="btn sm" id="openSettingsBtn" type="button">⚙️設定</button>
-        <button class="btn sm" id="moreBtn" type="button" aria-haspopup="menu" aria-expanded="false" title="班級、專案與備份管理">管理⋯</button>
+        <button class="btn sm" id="moreBtn" type="button" aria-haspopup="menu" aria-expanded="false" title="本機班級調整、專案、備份與列印">管理⋯</button>
         <div id="moreMenu" role="menu" aria-label="管理" hidden></div>
       </div>
 
       <!-- 以下低頻功能啟動時會由 JS 自動搬入「管理⋯」選單 -->
       <div id="secondaryActionsSource" style="display:none">
-        <button class="btn sm" id="addClassBtn" type="button">＋新增班級</button>
-        <button class="btn sm" id="renameBtn" type="button">重新命名</button>
-        <button class="btn danger sm" id="deleteClassBtn" type="button" title="刪除此班級（不可復原）">🗑刪除班級</button>
-        <button class="btn sm" id="manualRosterBtn" type="button">手動名冊</button>
-        <button class="btn sm" id="createFileBtn" type="button" title="日常使用的專案檔：建立後可自動寫入目前座位表資料">📝保存專案</button>
-        <button class="btn sm" id="linkFileBtn" type="button" title="開啟已建立的 seating-data.json 專案檔">📂開啟專案</button>
+        <button class="btn sm" id="addClassBtn" type="button">＋暫時新增班級</button>
+        <button class="btn sm" id="renameBtn" type="button">暫時重新命名</button>
+        <button class="btn danger sm" id="deleteClassBtn" type="button" title="只刪除目前分頁中的班級；下次同步會依後端名冊重新出現">🗑暫時移除班級</button>
+        <button class="btn sm" id="manualRosterBtn" type="button">手動調整本班名冊</button>
+        <button class="btn sm" id="createFileBtn" type="button" title="把目前座位配置保存到本機 seating-data.json；檔案可能含學生資料，請妥善保管">📝保存本機專案</button>
+        <button class="btn sm" id="linkFileBtn" type="button" title="開啟私人保存的 seating-data.json；雲端名冊仍以後端同步資料為準">📂開啟本機專案</button>
         <button class="btn sm" id="unlinkFileBtn" type="button" disabled title="停止連結目前專案檔">⏏️取消連結</button>
         <button class="btn sm" id="printBtn" type="button">列印</button>
         <button class="btn sm" id="backupBtn" type="button" title="備份目前座位配置；檔案可能含學生資料，請妥善保管">匯出座位備份</button>
@@ -906,11 +906,11 @@ button.btn.sm:active{ transform:translateY(0); }
 <!-- 刪除確認 -->
 <dialog id="deleteDlg">
   <div class="sheet">
-    <h3>刪除班級</h3>
+    <h3>暫時移除班級</h3>
     <p id="deleteHint" style="margin:.2rem 0 .8rem;color:#374151"></p>
     <div class="right">
       <button type="button" class="btn" id="cancelDeleteBtn">取消</button>
-      <button type="button" class="btn danger" id="confirmDeleteBtn">確定刪除</button>
+      <button type="button" class="btn danger" id="confirmDeleteBtn">確定移除</button>
     </div>
   </div>
 </dialog>
@@ -944,7 +944,7 @@ button.btn.sm:active{ transform:translateY(0); }
   <form id="settingsForm" class="sheet">
     <div class="settings-v346-head">
       <h3>⚙️ 座位表設定</h3>
-      <div class="settings-subtitle">雲端安全版：Google 帳號通過白名單後即可同步。名冊來源已固定在後端，換電腦不必重新設定試算表。</div>
+      <div class="settings-subtitle">雲端安全版：Google 帳號通過白名單後即可同步。名冊來源由後端「系統設定」管理，日常使用不需輸入試算表網址。</div>
     </div>
 
     <div class="settings-v346-body">
@@ -952,11 +952,7 @@ button.btn.sm:active{ transform:translateY(0); }
       <section class="settings-section">
         <div class="settings-section-head">
           <span class="settings-step">1</span>
-          <div><div class="settings-section-title">雲端連線</div><div class="settings-section-desc">名冊試算表已固定綁定在安全後端；換電腦時不需要重新輸入試算表網址。</div></div>
-        </div>
-        <div class="row" style="display:none">
-          <input id="gasUrlInput" type="url" />
-          <input id="sheetIdInput" type="text" />
+          <div><div class="settings-section-title">雲端連線</div><div class="settings-section-desc">名冊試算表由管理者在後端「系統設定 → SPREADSHEET_ID」指定；一般使用者與換電腦時都不需要輸入試算表網址。</div></div>
         </div>
         <div class="settings-source-row">
           <div style="min-width:0">
@@ -994,12 +990,12 @@ button.btn.sm:active{ transform:translateY(0); }
         <details class="roster-fields" id="rosterFieldsDetails">
           <summary>名冊欄位設定 <span id="rosterFieldsSummary" class="roster-fields-summary">使用預設格式</span></summary>
           <div class="roster-grid">
-            <label>座號欄 <span class="field-hint" title="例如 C；也可填欄號 3。留白時使用舊版 D 欄單欄模式。">?</span><input id="noColInput" type="text" placeholder="例：C"></label>
-            <label>姓名欄 <span class="field-hint" title="例如 D。若使用雙欄模式，建議座號欄與姓名欄都填。">?</span><input id="nameColInput" type="text" placeholder="例：D"></label>
+            <label>座號欄 <span class="field-hint" title="例如 C；也可填欄號 3。留白時預設使用 C 欄座號。">?</span><input id="noColInput" type="text" placeholder="例：C"></label>
+            <label>姓名欄 <span class="field-hint" title="例如 D。留白時預設使用 D 欄姓名；若舊資料為 D 欄「座號 姓名」格式，後端仍保留相容判讀。">?</span><input id="nameColInput" type="text" placeholder="例：D"></label>
             <label>起始列 <span class="field-hint" title="第一位學生資料開始的列數，通常是 2。">?</span><input id="startRowInput" type="number" min="1" step="1" placeholder="例：2"></label>
             <label>照片資料夾儲存格 <span class="field-hint" title="每張班級工作表中，放置該班 Google Drive 照片資料夾連結的儲存格，例如 B32。">?</span><input id="photoCellInput" type="text" placeholder="例：B32；空白預設 E2"></label>
           </div>
-          <div class="help" style="margin-top:.45rem;">全部留白時：名冊使用 D2:D31（座號＋姓名同欄），起始列 2，照片儲存格 E2。</div>
+          <div class="help" style="margin-top:.45rem;">全部留白時採目前標準格式：C 欄座號、D 欄姓名、起始列 2、照片儲存格 E2；若偵測不到雙欄名冊，後端仍相容舊版 D2:D31「座號 姓名」格式。</div>
         </details>
       </section>
 
@@ -1035,11 +1031,15 @@ button.btn.sm:active{ transform:translateY(0); }
           </details>
           <details>
             <summary>📷 學生照片檔名規則</summary>
-            <div class="guide-body">RC3 起照片可維持 Google Drive 私人權限，不需要設為「知道連結的人可檢視」。照片由安全後端在白名單驗證通過後代理載入；一般使用者不需要額外操作。檔名需含座號，最推薦 <code>01.jpg～30.jpg</code>；也支援 <code>1.jpg</code>、<code>60101.jpg</code>、<code>601-05.jpg</code>、<code>601_18.jpg</code> 等格式。</div>
+            <div class="guide-body">學生照片可維持 Google Drive 私人權限，不需要設為「知道連結的人可檢視」。照片由安全後端在白名單驗證通過後代理載入；一般使用者不需要直接取得 Drive 權限，也不需要額外操作。檔名需含座號，最推薦 <code>01.jpg～30.jpg</code>；也支援 <code>1.jpg</code>、<code>60101.jpg</code>、<code>601-05.jpg</code>、<code>601_18.jpg</code> 等格式。</div>
           </details>
           <details class="tool-config-collapsible">
             <summary>🧰 後端工具連結</summary>
             <div class="guide-body"><div>工具清單由後端名冊試算表的「工具連結」工作表管理。修改啟用、排序、名稱與網址後，再測試連線或重新同步名冊即可更新。</div><div id="toolSettingsList" class="tool-list" aria-label="目前工具連結清單"></div></div>
+          </details>
+          <details>
+            <summary>🗂️「管理」選單怎麼用？</summary>
+            <div class="guide-body"><div>「管理」內的新增班級、重新命名、移除班級與手動名冊，只調整目前瀏覽器工作階段；再次按「同步」時，班級與姓名仍會以後端名冊為準。</div><div style="margin-top:.35rem;">「保存／開啟本機專案」與「匯出／匯入座位備份」會把座位配置保存到本機檔案，可能含學生資料，請勿放到公開 GitHub、公開雲端資料夾或轉傳給未授權人員。</div></div>
           </details>
           <details id="healthDetails">
             <summary>🔍 名冊／照片健康檢查明細</summary>
@@ -1048,7 +1048,7 @@ button.btn.sm:active{ transform:translateY(0); }
           <details>
             <summary>🔧 GAS 部署提醒｜DEFAULT_GAS_URL 從哪裡取得？</summary>
             <div class="guide-body">
-              <div><strong>雲端安全版</strong>已把名冊試算表固定綁定在後端，日常使用不再輸入試算表 ID。<code>DEFAULT_GAS_URL</code> 仍是前端連到安全後端的 Web App 網址。</div>
+              <div><strong>雲端安全版</strong>已把名冊來源改由後端「系統設定」的 SPREADSHEET_ID 管理，日常使用不再輸入試算表 ID。<code>DEFAULT_GAS_URL</code> 仍是前端連到安全後端的 Web App 網址。</div>
               <div style="margin-top:.4rem;"><strong>取得方式：</strong></div>
               <div>1. 開啟後端「班級學生名冊」Google 試算表。</div>
               <div>2. 點選「擴充功能 → Apps Script」。</div>
@@ -1058,7 +1058,7 @@ button.btn.sm:active{ transform:translateY(0); }
               <div>6. 這一步只在「第一次部署」或「建立全新 Web App 部署」時需要：由管理者在 HTML 的 <code>DEFAULT_GAS_URL</code> 設定一次。日常使用者不需要填寫 GAS 網址。</div>
               <div style="margin-top:.45rem;"><strong>注意：</strong>若只是「管理部署作業 → 編輯 → 新增版本 → 部署」，通常沿用原部署網址，不必修改；若使用「新增部署」建立新的 Web App，網址可能改變，就要同步更新 <code>DEFAULT_GAS_URL</code>。</div>
               <div style="margin-top:.4rem;">簡單記法：GAS 網址屬於「部署設定」，不是「使用者設定」；設定一次後，GitHub Pages 日常使用不再處理它。</div>
-              <div style="margin-top:.6rem;"><strong>目前 v4.0 正確流程：</strong>先在後端「系統設定」填入 <code>GOOGLE_CLIENT_ID</code> 與 <code>ALLOWED_EMAILS</code> → Web App 以擁有者身分執行、存取權限設為「所有人」 → HTML 固定填入 Web App URL → 使用者從 GitHub Pages 以白名單 Google 帳號登入。未通過後端 Token 與白名單驗證時，不回傳學生資料。 RC3 的學生照片也不再回傳 Drive 直連網址，而是經相同白名單驗證後由後端安全載入。</div>
+              <div style="margin-top:.6rem;"><strong>目前 v4.0 正確流程：</strong>先在後端「系統設定」填入 <code>GOOGLE_CLIENT_ID</code>、<code>ALLOWED_EMAILS</code> 與 <code>SPREADSHEET_ID</code> → Web App 以擁有者身分執行、存取權限設為「所有人」 → HTML 固定填入 Web App URL → 使用者從 GitHub Pages 以白名單 Google 帳號登入。未通過後端 Token 與白名單驗證時，不回傳學生資料。 學生照片不回傳 Drive 直連網址，而是經相同白名單驗證後由後端安全載入。</div>
             </div>
           </details>
         </div>
@@ -1121,11 +1121,9 @@ const MAX_DIM = 720;
 const IMG_TYPE_PREFERRED = 'image/webp';
 const IMG_QUALITY = 0.78;
 const LS_KEY = 'seating.3x10.portable.v6';
-const LS_GAS_URL = 'seating.gas.endpoint.v1';
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwMeVjbMZOLqI4piW6S0o6i-7htstgEkxuK4mReQqH86kVspUl5V7UWHen7Tul-_oSqNQ/exec'; // 固定 GAS Web App URL（隱藏於設定頁）
 const SS_AUTH_TOKEN = 'seating.auth.idtoken.v4';
 let cloudAuth = { token:'', email:'', clientId:'', exp:0, ready:false };
-const LS_SHEET_ID = 'seating.sheet.id.v1';
 const LS_LAST_PREVIEW = 'seating.last.preview.v1';
 
 
@@ -1221,7 +1219,7 @@ let fileProxyTargetKey = null;
 
 /* 設定面板元素 */
 const settingsDlg = $('#settingsDlg'), settingsForm = $('#settingsForm');
-const gasUrlInput = $('#gasUrlInput'), sheetIdInput = $('#sheetIdInput');
+const gasUrlInput = null, sheetIdInput = null; // v4.0：來源由後端管理，保留變數僅供舊流程相容
 const includePhotosChk = $('#includePhotosChk');
 const testFetchBtn = $('#testFetchBtn'), testResult = $('#testResult');
 const connectionStatus = $('#connectionStatus');
@@ -1407,7 +1405,7 @@ async function apiPost_(action='data', extra={}){
   if(data.user?.email){ cloudAuth.email=data.user.email; updateAuthorizedUi_(); }
   return data;
 }
-// RC3：私人 Drive 照片不再使用公開／直連網址。
+// v4.0：私人 Drive 照片不使用公開／直連網址。
 // 僅在目前分頁記憶體快取已通過後端白名單驗證所取得的圖片資料；關閉分頁即消失。
 const securePhotoCache_ = new Map();
 const securePhotoPending_ = new Map();
@@ -1518,10 +1516,7 @@ testGasOnlyBtn?.addEventListener('click', testGasConnectionOnly_);
 refreshGasConnectionInfo_();
 function setGasUrl(v){
   // 保留函式名稱以相容舊流程，但此版本不再儲存使用者輸入的 GAS URL。
-  try{ localStorage.removeItem(LS_GAS_URL); }catch(_){}
 }
-function getSheetId(){ return localStorage.getItem(LS_SHEET_ID)||''; }
-function setSheetId(v){ localStorage.setItem(LS_SHEET_ID, v||''); }
 function savePreview(obj){ sessionStorage.setItem(LS_LAST_PREVIEW, JSON.stringify(obj||null)); }
 function loadPreview(){ try{ return JSON.parse(sessionStorage.getItem(LS_LAST_PREVIEW)||'null'); }catch{return null;} }
 
@@ -2186,7 +2181,7 @@ classForm.addEventListener('submit', e=>{
 });
 document.getElementById('deleteClassBtn').addEventListener('click', ()=>{
   const c=active(); if(!c) return;
-  deleteHint.textContent=`確定要刪除「${c.name}」嗎？此操作無法復原（建議先匯出備份）。`;
+  deleteHint.textContent=`確定要從目前分頁暫時移除「${c.name}」嗎？下次同步會依後端名冊重新建立；若有手動座位調整，建議先匯出備份。`;
   openDlg(deleteDlg);
 });
 document.getElementById('cancelDeleteBtn').addEventListener('click', ()=> closeDlg(deleteDlg));
@@ -2367,11 +2362,11 @@ document.getElementById('migrationHelpBtn')?.addEventListener('click', ()=>{
   alert([
     '移機前快速檢查：',
     '',
-    '1. 先按「匯出座位備份」，下載座位表 v4.0 備份 JSON。注意：備份檔可能包含學生姓名、座號與照片連結，請視為敏感資料妥善保管。',
+    '1. 先按「匯出座位備份」，下載座位表 v4.0 備份 JSON。注意：備份檔可能包含學生姓名、座號、照片參照或手動加入的照片資料，請視為敏感資料妥善保管。',
     '2. 若平常使用「保存專案」，請一併保存 seating-data.json。',
     '3. 新電腦開啟 GitHub 固定網址後，先用白名單 Google 帳號登入；只有真的需要還原座位配置時才匯入私人保存的座位備份。',
     '4. 若要重新連結專案檔，再按「開啟專案」選擇 seating-data.json。',
-    '5. 若照片未顯示，請確認目前登入的白名單 Google 帳號也具有該 Drive 照片資料夾的檢視權限；不需要設為「知道連結的人可檢視」。',
+    '5. 若照片未顯示，請由管理者確認 Web App 部署帳號能讀取該 Drive 照片資料夾；一般白名單使用者不需要直接取得資料夾權限，也不需要設為「知道連結的人可檢視」。',
     '',
     '提醒：雲端安全版不會把學生名冊長期留在 localStorage；關閉分頁後需重新由安全後端同步。座位配置備份仍可能含學生姓名與照片參照，請勿上傳到公開空間。'
   ].join('\n'));
@@ -2387,7 +2382,7 @@ document.getElementById('backupBtn').addEventListener('click', ()=>{
     const pack = {
       format:'seat-tool-v4.0-secure',
       exportedAt:new Date().toISOString(),
-      privacyNotice:'此備份可能包含學生姓名、座號與照片連結，請勿上傳至公開空間。',
+      privacyNotice:'此備份可能包含學生姓名、座號、照片參照或手動加入的照片資料，請勿上傳至公開空間。',
       cfg:{
         noCol:localStorage.getItem('seating.col.no.v1')||'',
         nameCol:localStorage.getItem('seating.col.name.v1')||'',
@@ -2511,7 +2506,7 @@ function updateRosterFieldsSummary(){
   if(!rosterFieldsSummary) return;
   const no=(noColInput?.value||'').trim(), nm=(nameColInput?.value||'').trim();
   const sr=(startRowInput?.value||'').trim()||'2', pc=(photoCellInput?.value||'').trim()||'E2';
-  rosterFieldsSummary.textContent = (no||nm) ? `座號 ${no||'?'}｜姓名 ${nm||'?'}｜第 ${sr} 列｜照片 ${pc}` : `預設 D2:D31｜照片 ${pc}`;
+  rosterFieldsSummary.textContent = (no||nm) ? `座號 ${no||'?'}｜姓名 ${nm||'?'}｜第 ${sr} 列｜照片 ${pc}` : `預設 C/D 欄｜第 ${sr} 列｜照片 ${pc}`;
 }
 function setSettingsDirty(on){
   settingsDirty=!!on;
@@ -2521,13 +2516,11 @@ function setSettingsDirty(on){
   }
 }
 function markSettingsDirty(){ setSettingsDirty(true); updateRosterFieldsSummary(); setConnectionState('neutral','設定已變更，尚未重新測試'); }
-[noColInput,nameColInput,startRowInput,photoCellInput,sheetIdInput,includePhotosChk].forEach(el=>{
+[noColInput,nameColInput,startRowInput,photoCellInput,includePhotosChk].forEach(el=>{
   el?.addEventListener('input', markSettingsDirty);
   el?.addEventListener('change', markSettingsDirty);
 });
 openSettingsBtn.addEventListener('click', ()=>{
-  gasUrlInput.value = getGasUrl();
-  sheetIdInput.value = '（雲端安全版已由後端固定綁定）';
   updateAuthorizedUi_();
   includePhotosChk.checked = true;
   setSettingsDirty(false);
@@ -2593,7 +2586,6 @@ if (typeof makeSnapshotFromCurrent === 'function') makeSnapshotFromCurrent('存�
 
     // 2) 清空設定面板 UI 欄位（如果存在）
     try {
-      if (typeof sheetIdInput  !== 'undefined' && sheetIdInput)  sheetIdInput.value  = '';
       if (typeof noColInput    !== 'undefined' && noColInput)    noColInput.value    = '';
       if (typeof nameColInput  !== 'undefined' && nameColInput)  nameColInput.value  = '';
       if (typeof startRowInput !== 'undefined' && startRowInput) startRowInput.value = '';
@@ -2883,8 +2875,6 @@ c.seats[k] = { name: keepName, img: isSecurePhotoRef_(url) ? url : normalizeDriv
   }
 
   // Settings 預填與上次預覽
-  gasUrlInput.value = getGasUrl();
-  sheetIdInput.value = '（後端固定綁定）';
   renderPreview(lastPreview);
   initCloudAuth_();
 
