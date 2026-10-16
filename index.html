@@ -651,16 +651,6 @@ button.btn.sm:active{ transform:translateY(0); }
   white-space:nowrap;
 }
 .current-class-status .count{font-weight:500;color:#64748b;}
-.sync-diff-banner{
-  display:flex; align-items:flex-start; justify-content:space-between; gap:.6rem;
-  margin:.1rem .8rem .5rem; padding:.48rem .65rem;
-  border:1px solid #bbf7d0; border-radius:10px; background:#f0fdf4;
-  color:#166534; font-size:.88rem; line-height:1.45;
-}
-.sync-diff-banner[hidden]{display:none;}
-.sync-diff-banner .close{
-  border:0;background:transparent;color:inherit;cursor:pointer;font-size:1rem;padding:0 .15rem;
-}
 .timer-presets{
   display:flex; gap:.35rem; flex-wrap:wrap; justify-content:center; margin:.1rem 0 .65rem;
 }
@@ -679,7 +669,6 @@ button.btn.sm:active{ transform:translateY(0); }
 :root[data-theme="dark"] .primary-actions,
 :root[data-theme="dark"] .current-class-status{background:#1e1b4b !important;border-color:#4338ca !important;color:#ddd6fe !important;}
 :root[data-theme="dark"] .current-class-status .count{color:#a8b3c7 !important;}
-:root[data-theme="dark"] .sync-diff-banner{background:#052e16 !important;border-color:#166534 !important;color:#bbf7d0 !important;}
 
 
 
@@ -860,10 +849,6 @@ button.btn.sm:active{ transform:translateY(0); }
         <input id="restoreInput" type="file" accept="application/json" style="display:none" />
         <button class="btn sm" id="migrationHelpBtn" type="button">移機提醒</button>
       </div>
-    </div>
-    <div id="syncDiffBanner" class="sync-diff-banner" hidden>
-      <span id="syncDiffText"></span>
-      <button type="button" class="close" id="syncDiffClose" aria-label="關閉同步摘要">×</button>
     </div>
   </div>
 </header>
@@ -1211,9 +1196,6 @@ const timerClose = document.getElementById('timerClose');
 const timerDragHandle = document.getElementById('timerDragHandle');
 const timerModeHint = document.getElementById('timerModeHint');
 const currentClassStatus = document.getElementById('currentClassStatus');
-const syncDiffBanner = document.getElementById('syncDiffBanner');
-const syncDiffText = document.getElementById('syncDiffText');
-const syncDiffClose = document.getElementById('syncDiffClose');
 
 let fileProxyTargetKey = null;
 
@@ -2785,7 +2767,6 @@ function buildSyncDiff(data){
   return {newClasses,added,removed,renamed,photoChanged,toolsChanged};
 }
 function showSyncDiff(diff){
-  if(!syncDiffBanner || !syncDiffText) return;
   const bits=[];
   if(diff.newClasses) bits.push(`新增班級 ${diff.newClasses}`);
   if(diff.added) bits.push(`新增學生 ${diff.added}`);
@@ -2793,11 +2774,11 @@ function showSyncDiff(diff){
   if(diff.renamed) bits.push(`姓名異動 ${diff.renamed}`);
   if(diff.photoChanged) bits.push(`照片更新 ${diff.photoChanged}`);
   if(diff.toolsChanged) bits.push('工具連結有更新');
-  syncDiffText.textContent = bits.length ? `✓ 本次同步：${bits.join('｜')}` : '✓ 本次同步完成：與目前資料相比沒有偵測到異動。';
-  syncDiffBanner.hidden = false;
+  // 只有真的有異動才用浮動提示顯示；不再占用工具列下方高度。
+  if(bits.length) showToast(`✓ 同步更新：${bits.join('｜')}`, 3800);
 }
-syncDiffClose?.addEventListener('click', ()=>{ syncDiffBanner.hidden = true; });
 
+/* v1.0 UI精修：同步差異改為浮動 Toast，不再推擠座位表 */
 /* 從試算表匯入（GAS）- 快捷：全部匯入 */
 document.getElementById('importGasBtn').addEventListener('click', async ()=>{
   if(!getAuthToken_()){ if(authGate) authGate.hidden=false; initCloudAuth_(); return; }
@@ -2809,7 +2790,7 @@ document.getElementById('importGasBtn').addEventListener('click', async ()=>{
     lastPreview={classes:data.classes||[],tools:data.tools||[]}; savePreview(lastPreview); renderPreview(lastPreview); renderToolSettingsList(); renderHealthReport(data);
     const toolCount=Array.isArray(data.tools)?data.tools.length:getToolLinks().length;
     setStatus('同步完成：'+(data.classes?.length||0)+' 個班級，工具 '+toolCount+' 個','ok');
-    showSyncDiff(syncDiff); showToast('安全同步完成。差異摘要已顯示在工具列下方。');
+    showSyncDiff(syncDiff);
   }catch(err){
     setStatus('同步失敗：'+err.message,'bad');
     if(/登入|憑證|白名單|授權/.test(err.message)){ sessionStorage.removeItem(SS_AUTH_TOKEN); cloudAuth.token=''; cloudAuth.ready=false; updateAuthorizedUi_(); if(authGate) authGate.hidden=false; initCloudAuth_(); }
