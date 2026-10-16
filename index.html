@@ -19,7 +19,7 @@
   /* 品牌主色：Indigo 600，視覺柔和但有辨識度 */
   --brand:#4f46e5;
 
-  --cell:150px;
+  --cell:176px;
 }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Noto Sans TC,sans-serif}
@@ -811,7 +811,7 @@ button.btn.sm:active{ transform:translateY(0); }
       <div class="sizeCtl" title="調整卡片大小">
         <span>尺寸</span>
         <input id="sizeRange" type="range" min="120" max="200" step="2" />
-        <span id="sizeValue">150px</span>
+        <span id="sizeValue">176px</span>
       </div>
       <div class="status" id="fileStatus"><span class="dot warn"></span><span id="fileStatusText">未連結資料檔（使用本機儲存）</span></div>
     </div>
@@ -1340,10 +1340,20 @@ const defaultClass = (name='未命名班級') => ({ id: uid(), name, seats:{}, d
 
 // 雲端版 v1.0：學生名冊／照片不再長期留在 localStorage；只保留本分頁工作階段。
 try{ localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_LAST_PREVIEW); }catch(_){}
-let state = loadLocal() || { classes:[ defaultClass() ], activeId:null, settings:{ cell:150 } };
+let state = loadLocal() || { classes:[ defaultClass() ], activeId:null, settings:{ cell:176 } };
 if(!state.activeId) state.activeId = state.classes[0].id;
 state.classes.forEach(c=>{ if(!c.draws) c.draws={people:[], seats:[]}; });
-if(!state.settings) state.settings = { cell:150 };
+if(!state.settings) state.settings = { cell:176 };
+// v1.0 定版修正：舊版曾以 150px 作為預設值；第一次載入新版時升級為 176px。
+// 僅做一次，不影響之後使用者自行調整尺寸。
+try{
+  const SIZE_MIGRATION_KEY='seat-cloud-v1-size176-migrated';
+  if(!sessionStorage.getItem(SIZE_MIGRATION_KEY)){
+    if(Number(state.settings.cell)===150) state.settings.cell=176;
+    sessionStorage.setItem(SIZE_MIGRATION_KEY,'1');
+  }
+}catch(_){ if(Number(state.settings.cell)===150) state.settings.cell=176; }
+
 if(!Array.isArray(state.settings.tools)) state.settings.tools = DEFAULT_TOOL_LINKS.map(t=>({...t}));
 
 let projectHandle = null, saveTimer = null, saving = false, lastFileName = '';
@@ -1514,7 +1524,7 @@ function getPhotoCell(){ return localStorage.getItem(LS_PHOTO_CELL) || ''; }
 function setPhotoCell(v){ localStorage.setItem(LS_PHOTO_CELL, (v||'').trim()); }
 
 function getToolLinks(){
-  if(!state.settings) state.settings = { cell:150 };
+  if(!state.settings) state.settings = { cell:176 };
   if(!Array.isArray(state.settings.tools)) state.settings.tools = DEFAULT_TOOL_LINKS.map(t=>({...t}));
   return state.settings.tools;
 }
@@ -1530,7 +1540,7 @@ function normalizeToolLink(url){
   }
 }
 function setToolLinksFromGas(data){
-  if(!state.settings) state.settings = { cell:150 };
+  if(!state.settings) state.settings = { cell:176 };
   if(!data || !Array.isArray(data.tools)) return;
   const cleaned = data.tools
     .map(t => ({
@@ -1733,12 +1743,12 @@ async function loadFromFile(){
     if(data && data.classes){
       data.classes.forEach(c=>{ if(!c.draws) c.draws={people:[],seats:[]}; });
       state = data;
-      if(!state.settings) state.settings = {cell:150};
+      if(!state.settings) state.settings = {cell:176};
       if(!Array.isArray(state.settings.tools)) state.settings.tools = DEFAULT_TOOL_LINKS.map(t=>({...t}));
       setActive(state.activeId || state.classes[0]?.id || (state.classes[0]=defaultClass()).id);
       renderToolMenu();
       renderTabs(); renderGrid(); renderToolMenu();
-      sizeRange.value = state.settings.cell || 150; applyCellSize(state.settings.cell || 150);
+      sizeRange.value = state.settings.cell || 176; applyCellSize(state.settings.cell || 176);
       setStatus(`已連結：${file.name}`,'ok');
       showToast('已連結專案檔，之後修改會自動保存。');
       unlinkFileBtn.disabled = false;
@@ -2012,7 +2022,7 @@ function renderTabs(){
 
 /* 尺寸滑桿 */
 function applyCellSize(px){ document.documentElement.style.setProperty('--cell', px + 'px'); sizeValue.textContent = px + 'px'; }
-sizeRange.addEventListener('input', ()=>{ const v=Math.max(120,Math.min(200,+sizeRange.value||150)); state.settings.cell=v; scheduleSave(); applyCellSize(v); });
+sizeRange.addEventListener('input', ()=>{ const v=Math.max(120,Math.min(200,+sizeRange.value||176)); state.settings.cell=v; scheduleSave(); applyCellSize(v); });
 
 /* ========= 計時器 ========= */
 let tRunning = false, tBase = 0, tAccum = 0, tTick = null;
@@ -2414,7 +2424,7 @@ document.getElementById('restoreInput').addEventListener('change', async e=>{
       // 補上缺的欄位
       importedState.classes.forEach(c=>{ if(!c.draws) c.draws={people:[],seats:[]}; });
       state = importedState;
-      if(!state.settings) state.settings = {cell:150};
+      if(!state.settings) state.settings = {cell:176};
       if(!Array.isArray(state.settings.tools)) state.settings.tools = DEFAULT_TOOL_LINKS.map(t=>({...t}));
 
       // 如果是新打包且有 cfg，把設定寫回 localStorage
@@ -2429,7 +2439,7 @@ document.getElementById('restoreInput').addEventListener('change', async e=>{
       }
 
       scheduleSave(); renderTabs(); renderGrid(); renderToolMenu();
-      try{ applyCellSize(state.settings.cell||150); sizeRange.value = state.settings.cell||150; }catch(_){}
+      try{ applyCellSize(state.settings.cell||176); sizeRange.value = state.settings.cell||176; }catch(_){}
 
       setStatus('已從備份載入座位配置','ok');
       showToast('已匯入座位配置與非敏感偏好；雲端名冊仍以安全後端為準。');
@@ -2610,7 +2620,7 @@ if (typeof makeSnapshotFromCurrent === 'function') makeSnapshotFromCurrent('存�
     if (!confirm(msg)) return;
 
     // 1) 建立一個全新的、乾淨的狀態（保留 cell 尺寸設定）
-    const keptCell = (state && state.settings && state.settings.cell) ? state.settings.cell : 150;
+    const keptCell = (state && state.settings && state.settings.cell) ? state.settings.cell : 176;
     const keptTools = getToolLinks().map(t=>({...t}));
     const fresh = { classes: [ defaultClass() ], activeId: null, settings: { cell: keptCell, tools: keptTools } };
     fresh.activeId = fresh.classes[0].id;
@@ -2766,6 +2776,17 @@ function buildSyncDiff(data){
   const toolsChanged = oldTools === newTools ? 0 : 1;
   return {newClasses,added,removed,renamed,photoChanged,toolsChanged};
 }
+function removeLegacySyncStrip_(){
+  // 防呆：舊版同步差異列不應再存在於正常版面流中。
+  // 若舊 DOM/殘留程式建立了「本次同步」列，直接移除；浮動 toast 不受影響。
+  document.querySelectorAll('body *').forEach(el=>{
+    if(el.id==='toast' || el.closest?.('#toast')) return;
+    if(el.children.length===0 && /^\s*✓?\s*本次同步[：:]/.test(el.textContent||'')){
+      const box=el.closest('[id*="sync" i], [class*="sync" i], .notice, .alert, .message, .status-strip') || el;
+      if(box && box.id!=='fileStatus') box.remove();
+    }
+  });
+}
 function showSyncDiff(diff){
   const bits=[];
   if(diff.newClasses) bits.push(`新增班級 ${diff.newClasses}`);
@@ -2779,6 +2800,9 @@ function showSyncDiff(diff){
 }
 
 /* v1.0 UI精修：同步差異改為浮動 Toast，不再推擠座位表 */
+removeLegacySyncStrip_();
+const legacySyncObserver = new MutationObserver(()=>removeLegacySyncStrip_());
+legacySyncObserver.observe(document.body,{childList:true,subtree:true});
 /* 從試算表匯入（GAS）- 快捷：全部匯入 */
 document.getElementById('importGasBtn').addEventListener('click', async ()=>{
   if(!getAuthToken_()){ if(authGate) authGate.hidden=false; initCloudAuth_(); return; }
@@ -2790,6 +2814,7 @@ document.getElementById('importGasBtn').addEventListener('click', async ()=>{
     lastPreview={classes:data.classes||[],tools:data.tools||[]}; savePreview(lastPreview); renderPreview(lastPreview); renderToolSettingsList(); renderHealthReport(data);
     const toolCount=Array.isArray(data.tools)?data.tools.length:getToolLinks().length;
     setStatus('同步完成：'+(data.classes?.length||0)+' 個班級，工具 '+toolCount+' 個','ok');
+    removeLegacySyncStrip_();
     showSyncDiff(syncDiff);
   }catch(err){
     setStatus('同步失敗：'+err.message,'bad');
@@ -2842,7 +2867,7 @@ c.seats[k] = { name: keepName, img: isSecurePhotoRef_(url) ? url : normalizeDriv
 
 /* 啟動 */
 (function init(){
-  sizeRange.value = state.settings.cell || 150; applyCellSize(state.settings.cell || 150);
+  sizeRange.value = state.settings.cell || 176; applyCellSize(state.settings.cell || 176);
   renderTabs(); renderGrid(); renderToolMenu();
 
   if (document.documentElement.classList.contains('embedded')) {
