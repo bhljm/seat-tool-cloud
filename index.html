@@ -790,6 +790,22 @@ button.btn.sm:active{ transform:translateY(0); }
   .cloud-auth-chip .email{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
   :root[data-theme="dark"] .auth-gate{background:rgba(15,23,42,.96)}
   :root[data-theme="dark"] .auth-status{background:#111827}
+  /* v1.0 縮圖批次載入：避免尚未有 src 的 img 顯示破圖圖示 */
+  .photo-load-state{
+    position:absolute; inset:0; z-index:1;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:.42rem; padding:2.4rem .5rem 2.2rem;
+    color:#64748b; background:#f8fafc; font-size:.84rem; text-align:center;
+    pointer-events:none;
+  }
+  .photo-load-state[hidden]{display:none}
+  .photo-load-state.error{color:#b45309;background:#fffbeb;pointer-events:auto}
+  .photo-retry-btn{
+    border:1px solid #f59e0b; background:#fff; color:#92400e;
+    border-radius:999px; padding:.24rem .58rem; font-size:.78rem; cursor:pointer;
+  }
+  :root[data-theme="dark"] .photo-load-state{background:#111827;color:#a8b3c7}
+  :root[data-theme="dark"] .photo-load-state.error{background:#33250d;color:#fcd34d}
 </style>
 </head>
 <body>
@@ -797,7 +813,7 @@ button.btn.sm:active{ transform:translateY(0); }
   <div class="auth-card">
     <div class="auth-icon">🔐</div>
     <h2 id="authTitle">座位表工具安全登入</h2>
-    <p>學生名冊與照片屬於校務資料，請先使用已授權的 Google 帳號登入。</p>
+    <p>請使用已授權的Google帳號登入。</p>
     <div id="authStatus" class="auth-status">正在連接安全後端…</div>
     <div id="googleSignInButton"></div>
     <button type="button" class="btn sm" id="retryAuthBtn" hidden>重新載入登入</button>
@@ -1387,40 +1403,148 @@ function getAuthToken_(){
   }catch(_){}
   return '';
 }
-async function apiPost_(action='data', extra={}){
+async function apiPost_(action='data', extra={}, options={}){
   const token=getAuthToken_();
   if(!token) throw new Error('登入已失效，請重新登入 Google 帳號。');
   const body=new URLSearchParams({action,credential:token,...extra});
-  const res=await fetch(getGasUrl(),{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:body.toString(),redirect:'follow'});
-  const data=await res.json();
-  if(!data.success) throw new Error(data.error||'安全後端回傳失敗');
-  if(data.user?.email){ cloudAuth.email=data.user.email; updateAuthorizedUi_(); }
-  return data;
+  const timeoutMs=Math.max(0,Number(options.timeoutMs)||0);
+  const controller=timeoutMs ? new AbortController() : null;
+  const timer=controller ? setTimeout(()=>controller.abort(),timeoutMs) : null;
+  try{
+    const res=await fetch(getGasUrl(),{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
+      body:body.toString(),
+      redirect:'follow',
+      signal:controller?.signal
+    });
+    const data=await res.json();
+    if(!data.success) throw new Error(data.error||'安全後端回傳失敗');
+    if(data.user?.email){ cloudAuth.email=data.user.email; updateAuthorizedUi_(); }
+    return data;
+  }catch(err){
+    if(err?.name==='AbortError') throw new Error('照片載入逾時，正在嘗試補載。');
+    throw err;
+  }finally{
+    if(timer) clearTimeout(timer);
+  }
 }
 // 雲端版 v1.0：私人 Drive 照片不使用公開／直連網址。
-// 僅在目前分頁記憶體快取已通過後端白名單驗證所取得的圖片資料；關閉分頁即消失。
-// 效能策略：只在目前實際渲染的班級觸發照片請求；同一分頁已取得的照片以記憶體快取避免重複下載。
-// 不建立永久照片快取、不改動 Drive 原圖，也不引入不穩定的縮圖轉換。
+// 縮圖優化版：名冊先載入；只有目前班級才取得照片索引，照片本體以 8 張一批安全載入。
+// 同時最多 2 批，失敗批次自動補載；成功照片只快取於目前分頁記憶體。
 const securePhotoCache_ = new Map();
 const securePhotoPending_ = new Map();
+const photoBatchWaiters_ = new Map();
+const photoBatchQueue_ = [];
+const PHOTO_BATCH_SIZE = 8;
+const PHOTO_BATCH_CONCURRENCY = 2;
+const PHOTO_BATCH_TIMEOUT_MS = 22000;
+const PHOTO_BATCH_MAX_ATTEMPTS = 3;
+const PHOTO_BATCH_WINDOW_MS = 35;
+let photoBatchActive_ = 0;
+let photoBatchTimer_ = null;
+
 function isSecurePhotoRef_(value){ return /^securephoto:/i.test(String(value||'')); }
-async function fetchSecurePhoto_(value){
+function wait_(ms){ return new Promise(resolve=>setTimeout(resolve,ms)); }
+function base64ToBlobUrl_(base64,mimeType){
+  const bin=atob(base64);
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes],{type:mimeType||'image/jpeg'}));
+}
+function shouldRetryPhotoError_(err){
+  const msg=String(err?.message||err||'');
+  return !/登入|憑證|白名單|授權|參照|不是圖片|檔案過大/.test(msg);
+}
+function evictSecurePhotoCache_(ref){
+  const src=securePhotoCache_.get(ref);
+  if(src && /^blob:/i.test(String(src))){ try{ URL.revokeObjectURL(src); }catch(_){ } }
+  securePhotoCache_.delete(ref);
+}
+function schedulePhotoBatchFlush_(){
+  if(photoBatchTimer_) return;
+  photoBatchTimer_=setTimeout(()=>{ photoBatchTimer_=null; flushPhotoBatchQueue_(); },PHOTO_BATCH_WINDOW_MS);
+}
+function flushPhotoBatchQueue_(){
+  while(photoBatchActive_ < PHOTO_BATCH_CONCURRENCY && photoBatchQueue_.length){
+    const refs=photoBatchQueue_.splice(0,PHOTO_BATCH_SIZE);
+    photoBatchActive_++;
+    requestPhotoBatchWithRetry_(refs).finally(()=>{
+      photoBatchActive_--;
+      if(photoBatchQueue_.length) flushPhotoBatchQueue_();
+    });
+  }
+}
+async function requestPhotoBatchWithRetry_(refs){
+  let pending=[...new Set(refs)].filter(Boolean);
+  let lastTransportError=null;
+  for(let attempt=1; attempt<=PHOTO_BATCH_MAX_ATTEMPTS && pending.length; attempt++){
+    try{
+      const data=await apiPost_('photobatch',{photoRefs:JSON.stringify(pending)},{timeoutMs:PHOTO_BATCH_TIMEOUT_MS});
+      const items=(data && data.items && typeof data.items==='object') ? data.items : {};
+      const errors=(data && data.errors && typeof data.errors==='object') ? data.errors : {};
+      const retry=[];
+      for(const ref of pending){
+        const waiter=photoBatchWaiters_.get(ref);
+        if(!waiter) continue;
+        const item=items[ref];
+        if(item?.data && item?.mimeType){
+          try{
+            const src=base64ToBlobUrl_(item.data,item.mimeType);
+            securePhotoCache_.set(ref,src);
+            photoBatchWaiters_.delete(ref);
+            waiter.resolve(src);
+          }catch(err){
+            photoBatchWaiters_.delete(ref);
+            waiter.reject(err);
+          }
+        }else{
+          const err=new Error(errors[ref]||'照片資料不完整。');
+          if(attempt<PHOTO_BATCH_MAX_ATTEMPTS && shouldRetryPhotoError_(err)) retry.push(ref);
+          else { photoBatchWaiters_.delete(ref); waiter.reject(err); }
+        }
+      }
+      pending=retry;
+    }catch(err){
+      lastTransportError=err;
+      if(attempt>=PHOTO_BATCH_MAX_ATTEMPTS || !shouldRetryPhotoError_(err)) break;
+    }
+    if(pending.length && attempt<PHOTO_BATCH_MAX_ATTEMPTS) await wait_(300+attempt*250);
+  }
+  if(pending.length){
+    for(const ref of pending){
+      const waiter=photoBatchWaiters_.get(ref);
+      if(!waiter) continue;
+      photoBatchWaiters_.delete(ref);
+      waiter.reject(lastTransportError||new Error('照片載入失敗。'));
+    }
+  }
+}
+function fetchSecurePhoto_(value){
   const raw=String(value||'');
   const ref=raw.replace(/^securephoto:/i,'');
-  if(!ref) throw new Error('照片參照不存在。');
-  if(securePhotoCache_.has(ref)) return securePhotoCache_.get(ref);
+  if(!ref) return Promise.reject(new Error('照片參照不存在。'));
+  if(securePhotoCache_.has(ref)) return Promise.resolve(securePhotoCache_.get(ref));
   if(securePhotoPending_.has(ref)) return securePhotoPending_.get(ref);
-  const task=(async()=>{
-    const data=await apiPost_('photo',{photoRef:ref});
-    if(!data.data || !data.mimeType) throw new Error('照片資料不完整。');
-    const src=`data:${data.mimeType};base64,${data.data}`;
-    securePhotoCache_.set(ref,src);
-    return src;
-  })().finally(()=>securePhotoPending_.delete(ref));
+  const task=new Promise((resolve,reject)=>{
+    photoBatchWaiters_.set(ref,{resolve,reject});
+    if(!photoBatchQueue_.includes(ref)) photoBatchQueue_.push(ref);
+    schedulePhotoBatchFlush_();
+  }).finally(()=>securePhotoPending_.delete(ref));
   securePhotoPending_.set(ref,task);
   return task;
 }
-function clearSecurePhotoCache_(){ securePhotoCache_.clear(); securePhotoPending_.clear(); }
+function clearSecurePhotoCache_(){
+  for(const src of securePhotoCache_.values()){
+    if(/^blob:/i.test(String(src||''))){ try{ URL.revokeObjectURL(src); }catch(_){ } }
+  }
+  securePhotoCache_.clear();
+  securePhotoPending_.clear();
+  photoBatchWaiters_.clear();
+  photoBatchQueue_.length=0;
+  if(photoBatchTimer_){ clearTimeout(photoBatchTimer_); photoBatchTimer_=null; }
+}
+
 
 async function verifyCurrentLogin_(){
   const data=await apiPost_('ping');
@@ -1467,7 +1591,7 @@ async function initCloudAuth_(){
     google.accounts.id.initialize({client_id:cloudAuth.clientId,callback:window.handleGoogleCredential,auto_select:false,cancel_on_tap_outside:false});
     googleSignInButton.innerHTML='';
     google.accounts.id.renderButton(googleSignInButton,{theme:'outline',size:'large',text:'signin_with',shape:'pill',width:280});
-    setAuthUi_('','請使用已列入白名單的 Google 帳號登入。');
+    setAuthUi_('','請使用已授權的Google帳號登入。');
   }catch(err){ setAuthUi_('bad',err.message); retryAuthBtn.hidden=false; }
 }
 retryAuthBtn?.addEventListener('click',()=>{ retryAuthBtn.hidden=true; initCloudAuth_(); });
@@ -1642,7 +1766,7 @@ function renderHealthReport(data){
     if(missing.length) issues.push('名冊中缺少照片：' + missing.map(n=>String(n).padStart(2,'0')).join('、'));
     if(orphan.length) issues.push('有照片但名冊沒有此座號：' + orphan.map(n=>String(n).padStart(2,'0')).join('、'));
     if(invalid.length) issues.push('檔名無法辨識座號：' + invalid.join('、'));
-    if(dup.length) issues.push('同座號重複照片：' + dup.map(x=>`${String(x.no).padStart(2,'0')}（${x.file}）`).join('、'));
+    if(dup.length) issues.push('同座號重複照片：' + dup.map(x=>String(typeof x==='object'?(x.no??''):x).padStart(2,'0')).join('、'));
     if(nonImage.length) issues.push('資料夾內含非圖片檔：' + nonImage.join('、'));
 
     totalMissing += missing.length;
@@ -1769,7 +1893,7 @@ async function loadFromFile(){
 
 /* ========= UI / 班級 =========== */
 function active(){ return state.classes.find(c=>c.id===state.activeId); }
-function setActive(id){ state.activeId=id; scheduleSave(); renderTabs(); renderGrid(); }
+function setActive(id){ state.activeId=id; scheduleSave(); renderTabs(); renderGrid(); ensureActiveClassPhotos_(); }
 function seatKey(r,c){ return `R${r}-C${c}`; }
 function seatNo(r,c){ return (r-1)*COLS + c; }
 function openDlg(dlg){ dlg.showModal ? dlg.showModal() : dlg.setAttribute('open',''); }
@@ -1789,14 +1913,37 @@ function seatCard(cls, r, c){
     const img = document.createElement('img');
     img.referrerPolicy = 'no-referrer';
     if(isSecurePhotoRef_(data.img)){
-      img.alt='學生照片載入中';
-      fetchSecurePhoto_(data.img).then(src=>{
-        // 卡片可能已重繪；仍只更新目前這個 img 節點。
-        img.src=src; img.alt='學生照片';
-      }).catch(err=>{
-        img.alt='照片載入失敗';
-        console.warn('安全照片載入失敗：',err.message);
-      });
+      img.alt='學生照片';
+      img.hidden=true;
+      const loadState=document.createElement('div');
+      loadState.className='photo-load-state';
+      loadState.innerHTML='<span>照片載入中…</span><button type="button" class="photo-retry-btn" hidden>↻ 重新載入</button>';
+      const loadText=loadState.querySelector('span');
+      const retryBtn=loadState.querySelector('.photo-retry-btn');
+      photo.appendChild(loadState);
+      const loadPhoto=async(force=false)=>{
+        const ref=String(data.img||'').replace(/^securephoto:/i,'');
+        if(force && ref) evictSecurePhotoCache_(ref);
+        loadState.hidden=false; loadState.classList.remove('error');
+        loadText.textContent=force?'正在重新載入照片…':'照片載入中…'; retryBtn.hidden=true;
+        try{
+          const src=await fetchSecurePhoto_(data.img);
+          if(!img.isConnected) return;
+          await new Promise((resolve,reject)=>{
+            img.onload=resolve;
+            img.onerror=()=>reject(new Error('瀏覽器無法顯示這張照片。'));
+            img.src=src;
+          });
+          img.hidden=false; loadState.hidden=true;
+        }catch(err){
+          if(!img.isConnected) return;
+          img.hidden=true; loadState.hidden=false; loadState.classList.add('error');
+          loadText.textContent='照片暫時載入失敗'; retryBtn.hidden=false;
+          console.warn('安全照片載入失敗：',err.message);
+        }
+      };
+      retryBtn.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); loadPhoto(true); });
+      loadPhoto(false);
     }else{
       // 保留老師手動貼入本機圖片／一般圖片網址的既有功能。
       const first = normalizeDriveImageURL(data.img);
@@ -2643,9 +2790,9 @@ if (typeof makeSnapshotFromCurrent === 'function') makeSnapshotFromCurrent('存�
   });
 })();
 
-async function fetchPreview(){
+async function fetchPreview(options={}){
   if(!getGasUrl()) throw new Error('程式內尚未設定 DEFAULT_GAS_URL');
-  const photos=includePhotosChk.checked?'1':'0';
+  const photos = options.forcePhotos===false ? '0' : (includePhotosChk.checked?'1':'0');
   const getVal=(id,fallback='')=>(document.getElementById(id)?.value||fallback||'').trim();
   const extra={photos};
   const noCol=getVal('noColInput',getNoCol()), nameCol=getVal('nameColInput',getNameCol()), startRow=getVal('startRowInput',getStartRow()), photoCell=getVal('photoCellInput',getPhotoCell());
@@ -2808,20 +2955,81 @@ document.getElementById('importGasBtn').addEventListener('click', async ()=>{
   if(!getAuthToken_()){ if(authGate) authGate.hidden=false; initCloudAuth_(); return; }
   setStatus('安全同步中…','warn');
   try{
-    const data=await fetchPreview();
+    // 日常同步先只抓名冊與工具；照片索引只抓目前班級，避免登入時掃描所有班級照片資料夾。
+    const data=await fetchPreview({forcePhotos:false});
     const syncDiff=buildSyncDiff(data);
     setToolLinksFromGas(data); applyGasImport(data.classes);
-    lastPreview={classes:data.classes||[],tools:data.tools||[]}; savePreview(lastPreview); renderPreview(lastPreview); renderToolSettingsList(); renderHealthReport(data);
+    lastPreview={classes:data.classes||[],tools:data.tools||[]}; savePreview(lastPreview); renderPreview(lastPreview); renderToolSettingsList();
     const toolCount=Array.isArray(data.tools)?data.tools.length:getToolLinks().length;
-    setStatus('同步完成：'+(data.classes?.length||0)+' 個班級，工具 '+toolCount+' 個','ok');
+    setStatus('名冊同步完成，正在載入目前班級照片…','warn');
     removeLegacySyncStrip_();
     showSyncDiff(syncDiff);
+    await ensureActiveClassPhotos_();
+    setStatus('同步完成：'+(data.classes?.length||0)+' 個班級，工具 '+toolCount+' 個','ok');
   }catch(err){
     setStatus('同步失敗：'+err.message,'bad');
     if(/登入|憑證|白名單|授權/.test(err.message)){ sessionStorage.removeItem(SS_AUTH_TOKEN); cloudAuth.token=''; cloudAuth.ready=false; updateAuthorizedUi_(); if(authGate) authGate.hidden=false; initCloudAuth_(); }
     alert('同步失敗：'+err.message+'\n請確認 Google 登入帳號、白名單與後端部署設定。');
   }
 });
+async function fetchClassPhotoIndex_(className){
+  const getVal=(id,fallback='')=>(document.getElementById(id)?.value||fallback||'').trim();
+  const extra={className:String(className||'')};
+  const noCol=getVal('noColInput',getNoCol()), nameCol=getVal('nameColInput',getNameCol()), startRow=getVal('startRowInput',getStartRow()), photoCell=getVal('photoCellInput',getPhotoCell());
+  if(noCol) extra.noCol=noCol; if(nameCol) extra.nameCol=nameCol; if(startRow) extra.startRow=startRow; if(photoCell) extra.photoCell=photoCell;
+  return await apiPost_('classphotos',extra,{timeoutMs:18000});
+}
+async function ensureActiveClassPhotos_(){
+  const c=active();
+  if(!c || !includePhotosChk?.checked) return;
+  if(c._cloudPhotoRefsLoaded){
+    // 已取得照片索引；未命中快取的照片會由 renderGrid 內的批次載入器自動補抓。
+    renderGrid();
+    return;
+  }
+  if(c._cloudPhotoIndexPending) return c._cloudPhotoIndexPending;
+  const classId=c.id;
+  const className=c.name;
+  c._cloudPhotoIndexPending=(async()=>{
+    try{
+      const data=await fetchClassPhotoIndex_(className);
+      const photos=data.photos && typeof data.photos==='object' ? data.photos : {};
+      const target=state.classes.find(x=>x.id===classId);
+      if(!target) return;
+      for(let no=1; no<=30; no++){
+        const r=Math.ceil(no/10), col=((no-1)%10)+1, k=seatKey(r,col);
+        if(!target.seats[k]) target.seats[k]={name:'',img:'',score:0};
+        const currentImg=target.seats[k].img||'';
+        const ref=photos[String(no)]||'';
+        if(ref){
+          target.seats[k].img=isSecurePhotoRef_(ref)?ref:normalizeDriveImageURL(ref);
+        }else if(isSecurePhotoRef_(currentImg)){
+          target.seats[k].img='';
+        }
+      }
+      target._cloudPhotoRefsLoaded=true;
+      target._cloudPhotoHealth=data.health||null;
+      scheduleSave();
+      if(state.activeId===classId) renderGrid();
+      const refs=Object.values(photos).filter(isSecurePhotoRef_);
+      if(refs.length){
+        const settled=await Promise.allSettled(refs.map(fetchSecurePhoto_));
+        const failed=settled.filter(x=>x.status==='rejected').length;
+        if(state.activeId===classId) renderGrid();
+        if(failed) showToast(`本班照片已載入，仍有 ${failed} 張可按「重新載入」補抓。`,4200);
+      }
+    }catch(err){
+      const target=state.classes.find(x=>x.id===classId);
+      if(target) target._cloudPhotoRefsLoaded=false;
+      if(state.activeId===classId) showToast('本班照片索引載入失敗：'+err.message,4200);
+    }finally{
+      const target=state.classes.find(x=>x.id===classId);
+      if(target) target._cloudPhotoIndexPending=null;
+    }
+  })();
+  return c._cloudPhotoIndexPending;
+}
+
 function applyGasImport(classes){
   if (!Array.isArray(classes)) return;
   for (const cls of classes) {
@@ -2829,32 +3037,38 @@ function applyGasImport(classes){
     let c = state.classes.find(x => x.name === name);
     if (!c) { c = defaultClass(name); state.classes.push(c); }
     c.draws = { people:[], seats:[] };
+    c._cloudPhotoRefsLoaded = false;
+    c._cloudPhotoIndexPending = null;
     for (let no=1; no<=30; no++){
       const r=Math.ceil(no/10), col=((no-1)%10)+1; const k=seatKey(r,col);
       if (!c.seats[k]) c.seats[k]={name:'', img:'', score:0};
       c.seats[k].name='';
+      // 重新同步名冊時移除上一輪後端 securephoto 參照；老師手動貼入的圖片保留。
+      if(isSecurePhotoRef_(c.seats[k].img)) c.seats[k].img='';
     }
     if (Array.isArray(cls.roster)) {
       for (const row of cls.roster) {
         const no = row.no|0; const nm = (row.name||'').trim();
         if (no>=1 && no<=30 && nm) {
           const r=Math.ceil(no/10), col=((no-1)%10)+1; const k=seatKey(r,col);
-          const keepImg   = c.seats[k]?.img   || '';
-const keepScore = Number(c.seats[k]?.score) || 0;
-c.seats[k] = { name: nm, img: keepImg, score: keepScore };
+          const keepImg = c.seats[k]?.img || '';
+          const keepScore = Number(c.seats[k]?.score) || 0;
+          c.seats[k] = { name: nm, img: keepImg, score: keepScore };
         }
       }
     }
+    // 設定頁的完整預覽仍可能帶回 photos；若有就直接採用。
     if (cls.photos && typeof cls.photos === 'object' && Object.keys(cls.photos).length){
       for (let no=1; no<=30; no++){
         const url = cls.photos[String(no)];
         if (url) {
           const r=Math.ceil(no/10), col=((no-1)%10)+1; const k=seatKey(r,col);
           const keepName  = c.seats[k]?.name  || '';
-const keepScore = Number(c.seats[k]?.score) || 0;
-c.seats[k] = { name: keepName, img: isSecurePhotoRef_(url) ? url : normalizeDriveImageURL(url), score: keepScore };
+          const keepScore = Number(c.seats[k]?.score) || 0;
+          c.seats[k] = { name: keepName, img: isSecurePhotoRef_(url) ? url : normalizeDriveImageURL(url), score: keepScore };
         }
       }
+      c._cloudPhotoRefsLoaded=true;
     }
   }
   if (classes.length) {
